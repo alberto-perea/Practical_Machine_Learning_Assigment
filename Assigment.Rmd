@@ -1,0 +1,125 @@
+---
+title: "Assigment"
+author: "Alberto Perea"
+date: "7 3 2021"
+output: md_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+library(rpart)
+library(gbm)
+```
+
+
+
+## Introduction
+In this assignment data from devices such as awbone Up, Nike FuelBand, and Fitbit will be used to predict the manner in which participants did the exercise. The participants were asked to serfdom barbell lifts correctly and incorrectly in 5 different ways.
+The participants were asked to do Dumbbell Biceps Curl, the 5 different ways they did it is described as follows:
+
+* Class A : Exactly according to the specification.
+* Class B : Throwing the elbows to the front.
+* Class C : Lifting the dumbbell only halfway.
+* Class D : Lowering the dumbbell only halfway.
+* Class E : Throwing the hips to the front.
+
+## Data
+
+First the data need to be read and cleaned.
+
+We will first read the data, and explore for NAs and left out the variables that are not needed and the one that has too much NAs
+```{r Cleaning1}
+
+training_csv <- read.csv("pml-training.csv", na.strings = c("NA","#DIV/0!", ""))
+validation_csv <- read.csv("pml-testing.csv", na.strings = c("NA","#DIV/0!", ""))
+idx <- which(colSums(is.na(training_csv))==0) #Extract columns where there are NO NAs
+dim(training_csv[,-idx])[2]
+```
+
+There are 100 variables that contain NAs which we will left out due that this gives no useful information, at the same time we are going to left out the index, timestamps, names and windows variables. This will make our data set cleaner and we will only be using data that we need.
+
+```{r Cleaning2}
+training_df <- training_csv[,idx]
+training_df <- training_df[,-c(1:7)]
+validation_df <- validation_csv[,idx]
+validation_df <- validation_df[,-c(1:7)] #Both data sets need to have the same columns
+```
+
+## Data partition Train and Test sets
+
+A partition will be created on the training data set, and two new data sets will be created, training (70% of original data set) and testing (30% of original data set), using as outcome the variable classe.   
+
+```{r Partition}
+in_train <- createDataPartition(training_df$classe, p = 0.7, list = FALSE)
+training <- training_df[in_train,]
+testing <- training_df[-in_train,]
+```
+
+## Model Selection and Cross Validation
+
+The next 3 models will be used:
+* Random Forest
+* Decision Tree
+* Generalized Boosted Model
+
+First Cross validation will be made, it will be a cross validation with 5 folds
+```{r cross_validation}
+set.seed(1212)
+control_rf <- trainControl(method = "cv", number = 5, allowParallel = TRUE)
+control_gbm <- trainControl(method = "cv", number = 5, allowParallel = TRUE)
+```
+
+### Random Forest
+
+Fit random forest model using our training data set
+```{r fit_rf, cache = TRUE,results='hide'}
+modrf <- train(classe~., data = training, method = "rf", trControl = control_rf)
+predrf <- predict(modrf, newdata = testing)
+cfmodrf <- confusionMatrix(predrf, as.factor(testing$classe))
+```
+
+```{r}
+cfmodrf$table
+cfmodrf$overall
+```
+
+### Decision Tree
+
+Fit decision tree model using our training data set
+```{r fit_dt, cache = TRUE, results='hide'}
+moddt <- rpart(classe~., data = training, method = "class")
+preddt <- predict(moddt, newdata = testing, type = "class")
+cfmoddt <- confusionMatrix(preddt, as.factor(testing$classe))
+```
+
+```{r}
+cfmoddt$table
+cfmoddt$overall
+```
+
+
+
+### Generalized Boosted Model
+
+Fit generalized boosted model using our training data set
+```{r fit_gbm, cache = TRUE, results='hide'}
+modgbm <- train(classe~., data = training, method = "gbm", trControl = control_gbm)
+predgbm <- predict(modgbm, newdata = testing)
+cfmodgbm <- confusionMatrix(predgbm, as.factor(testing$classe))
+```
+
+```{r}
+cfmodgbm$table
+cfmodgbm$overall
+```
+
+## Conclusion
+
+As it can be seen from the models tested before, random forest is the one that achieve the most accurate results, this model will be used for the test the 20 predictions in the validations set
+
+```{r validation}
+pred_val <- predict(modrf, newdata = validation_df)  
+pred_val
+```
+
